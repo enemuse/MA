@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bus & Tram Tracker</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+        }
+        #map { 
+            height: 100%; /* Set map to cover whole body */
+            width: 100%;
+        }
+        .vehicle-label {
+            font-size: 10px;
+            text-align: center;
+        }
+        .leaflet-top {
+            top: 10px;
+            left: 10px;
+            position: absolute;
+            z-index: 1000;
+        }
+        .leaflet-control-custom {
+            background-color: white;
+            border: 2px solid #ccc;
+            border-radius: 4px;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        var map = L.map('map').setView([31.7917, -7.0926], 9); // Centered on Morocco with zoom level 6
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+        }).addTo(map);
+
+        // Function to add vehicle markers
+        function addVehicleMarker(lat, lng, vehicleName) {
+            var iconUrl = 'vehicle-icon.png'; // URL to vehicle icon
+            var vehicleIcon = L.icon({
+                iconUrl: iconUrl,
+                iconSize: [24, 24], // Size of the icon
+                iconAnchor: [12, 24] // Point of the icon correspond to marker's location
+            });
+            L.marker([lat, lng], { icon: vehicleIcon }).addTo(map)
+            .bindTooltip(vehicleName, {permanent: true, className: 'vehicle-label'})
+            .openTooltip();
+        }
+
+        // Function to locate user's current location and add marker
+        function locateUser() {
+            map.locate({setView: true, maxZoom: 16});
+        }
+
+        // Add custom control for "My Location" button
+        L.Control.MyLocation = L.Control.extend({
+            onAdd: function(map) {
+                var container = L.DomUtil.create('div', 'leaflet-control leaflet-bar leaflet-control-custom');
+                container.innerHTML = 'My Location';
+                container.onclick = function(){
+                    locateUser();
+                };
+                return container;
+            },
+            onRemove: function(map) {}
+        });
+
+        L.control.myLocation = function(opts) {
+            return new L.Control.MyLocation(opts);
+        }
+
+        L.control.myLocation({ position: 'topright' }).addTo(map);
+
+        // Update user's location in real-time
+        map.on('locationfound', function(e) {
+            if (typeof userMarker === 'undefined') {
+                userMarker = L.marker(e.latlng).addTo(map);
+            } else {
+                userMarker.setLatLng(e.latlng);
+            }
+        });
+
+        // Fetch vehicle locations and update markers
+        function fetchVehicleLocations() {
+            fetch('https://aimline.online/MA/backend.php')
+            .then(response => response.json())
+            .then(data => {
+                // Clear existing markers
+                map.eachLayer(function (layer) {
+                    if (layer instanceof L.Marker && layer !== userMarker) {
+                        map.removeLayer(layer);
+                    }
+                });
+
+                // Add new markers
+                data.forEach(vehicle => {
+                    addVehicleMarker(vehicle.latitude, vehicle.longitude, vehicle.vehicle_name);
+                });
+            })
+            .catch(error => console.error('Error fetching vehicle locations:', error));
+        }
+
+        // load vehicle locations
+        fetchVehicleLocations();
+        
+        // update the vehicle locations
+        setInterval(fetchVehicleLocations, 5000);
+    </script>
+</body>
+</html>
